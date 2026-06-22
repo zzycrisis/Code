@@ -1,17 +1,45 @@
 import os
 import time
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 
 
 class ChatGPT:
-    def __init__(self, model_name="gpt-3.5-turbo", configs=None) -> None:
+    def __init__(self, model_name="gpt-3.5-turbo", configs=None, **kwargs) -> None:
         '''
         model_name: api version of a openai model (https://platform.openai.com/docs/models/overview)
+        Additional kwargs for Azure OpenAI: api_type, api_key, base_url, api_version, deployment_name
+        Priority: explicit kwargs > environment variables > defaults
         '''
         self.model_name = model_name
-        self.client = OpenAI(
-            base_url=os.getenv('BASE_URL') + '/v1', 
-            api_key=os.getenv('API_KEY'))
+
+        # Resolve API configuration: explicit kwargs > environment variables > defaults
+        api_type = kwargs.get("api_type") or os.getenv("API_TYPE", "openai")
+        api_key = kwargs.get("api_key") or os.getenv("API_KEY")
+        base_url = kwargs.get("base_url") or os.getenv("BASE_URL")
+        api_version = kwargs.get("api_version") or os.getenv("API_VERSION")
+        deployment_name = kwargs.get("deployment_name") or os.getenv("DEPLOYMENT_NAME")
+
+        if api_type == "azure":
+            if not api_version:
+                raise ValueError(
+                    "api_version is required for Azure OpenAI. "
+                    "Pass it as api_version= or set the API_VERSION env var."
+                )
+            self.client = AzureOpenAI(
+                azure_endpoint=base_url,
+                api_key=api_key,
+                api_version=api_version,
+            )
+            # On Azure, model= in chat.completions.create maps to deployment name.
+            # Use deployment_name if given, otherwise fall through to model_name.
+            if deployment_name:
+                self.model_name = deployment_name
+        else:
+            # Standard OpenAI (backward-compatible path)
+            self.client = OpenAI(
+                base_url=base_url + "/v1",
+                api_key=api_key,
+            )
 
         self.config = {
                 'n': 1,
