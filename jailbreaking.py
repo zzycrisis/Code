@@ -17,7 +17,7 @@ chat_hparams='temperature=0,n=1,max_tokens=128,top_p=0.0'
 parser = argparse.ArgumentParser()
 # jailbreaking setting
 parser.add_argument('--jailbreak-path', dest='jailbreak_path', type=str, help='Json file of the jailbreak prompts')
-parser.add_argument('--target-model', dest='target_model', choices=['gpt-3.5-turbo-0125', 'gpt-4-0125-preview', 'claude-3-5-sonnet-20241022', 'llama-2-7b', 'llama-2-13b', 'mistral-7b-v0.2'])
+parser.add_argument('--target-model', dest='target_model', choices=['gpt-3.5-turbo-0125', 'gpt-4-0125-preview', 'claude-3-5-sonnet-20241022', 'qwen2.5-7b', 'qwen2.5-3b', 'mistral-7b-v0.2'])
 parser.add_argument('--check-method', dest='check_method', default='key_words', choices=['key_words', 'gpt', 'multilingual'], help='The methods of cheking if the jailbreak succeed')
 args = parser.parse_args()
 jailbreak_path = args.jailbreak_path

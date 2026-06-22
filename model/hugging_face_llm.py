@@ -4,12 +4,12 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 class HuggingFaceLLM:
     MODEL_PATHS = {
-        "llama-2-7b": "./checkpoint/Llama-2-7b-chat-hf",
-        "llama-2-13b": "./checkpoint/Llama-2-13b-chat-hf",
+        "qwen2.5-7b": "./checkpoint/Qwen2.5-7B-Instruct",
+        "qwen2.5-3b": "./checkpoint/Qwen2.5-3B-Instruct",
         "mistral-7b-v0.2": "./checkpoint/Mistral-7B-Instruct-v0.2",
     }
 
-    def __init__(self, model_name="llama-2-7b", device="cuda") -> None:
+    def __init__(self, model_name="qwen2.5-7b", device="cuda") -> None:
         self.model_name = model_name
         
         self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_PATHS[model_name])
