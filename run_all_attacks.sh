@@ -1,5 +1,6 @@
 #!/bin/bash
 # 一键运行所有 jailbreak 方法攻击 qwen2.5-7b
+# 模型只加载一次，所有 attack 文件依次处理，避免重复加载导致 CUDA OOM
 
 TARGET="qwen2.5-7b"
 
@@ -16,12 +17,6 @@ ATTACK_FILES=(
     "attack/results/multilingual/MultiJail_unintentional_bn.json"
 )
 
-for f in "${ATTACK_FILES[@]}"; do
-    echo "========================================"
-    echo "Running: $f"
-    echo "========================================"
-    python jailbreaking.py --jailbreak-path "$f" --target-model "$TARGET"
-    echo ""
-done
+python jailbreaking.py --jailbreak-path "${ATTACK_FILES[@]}" --target-model "$TARGET"
 
 echo "All attacks completed!"

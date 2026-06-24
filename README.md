@@ -50,8 +50,19 @@ red-team
 Here, we have provided constructed jailbreak prompts of different jailbreak methods in "attack/results". You can also refer to the existing attack methods to generate jailbreaks for the target model. Then we can run "jailbreaking.py" to compute the ASR of the jailbreak method on the target LLM, e.g.,
 
 ```
-python jailbreaking.py --jailbreak-path 'attack/results/primary/GCG_individual_llama2-7b.json' --target-model 'llama-2-7b'
+# 单个 attack 文件
 python jailbreaking.py --jailbreak-path 'attack/results/primary/GCG_individual_llama2-7b.json' --target-model 'qwen2.5-7b'
+
+# 多个 attack 文件（模型只加载一次，避免重复加载导致 CUDA OOM）
+python jailbreaking.py \
+    --jailbreak-path \
+    'attack/results/primary/GCG_individual_llama2-7b.json' \
+    'attack/results/primary/AutoDAN-GA_llama2-7b.json' \
+    'attack/results/primary/PAIR_llama-2-7b.json' \
+    --target-model 'qwen2.5-7b'
+
+# 或使用 shell 脚本一键运行所有 attack
+bash run_all_attacks.sh
 ```
 
 After running jailbreaking.py, the records will be saved in "results/" as a json file.

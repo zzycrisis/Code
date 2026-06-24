@@ -29,15 +29,19 @@ class HuggingFaceLLM:
 
     def __call__(self, msg):
         inputs = self.tokenizer(msg, return_tensors='pt')
+        input_ids = inputs['input_ids'].to(self.device)
         with torch.no_grad():
             generate_ids = self.model.generate(
-                inputs['input_ids'].to(self.device),
+                input_ids,
                 pad_token_id=self.tokenizer.eos_token_id,
                 max_new_tokens=128,
             )
             out = self.tokenizer.batch_decode(
-                generate_ids[:, inputs['input_ids'].shape[1]:],
+                generate_ids[:, input_ids.shape[1]:],
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False,
             )[0]
-            return out
+        # 显式释放中间张量，防止显存碎片化
+        del inputs, input_ids, generate_ids
+        torch.cuda.empty_cache()
+        return out
