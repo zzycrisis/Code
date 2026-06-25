@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
 class HuggingFaceLLM:
@@ -16,11 +16,12 @@ class HuggingFaceLLM:
         print(f"[HuggingFaceLLM] Loading tokenizer for {model_name}...")
         self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_PATHS[model_name])
 
-        print(f"[HuggingFaceLLM] Loading model to {device} (int8 quantized, low_cpu_mem_usage)...")
-        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+        # fp16 + device_map="auto"：模型 14GB 左右，16G 显存基本够用
+        # accelerate 会自动把少量放不下的层 offload 到 CPU，比 8-bit 量化快得多
+        print(f"[HuggingFaceLLM] Loading model to {device} (fp16, device_map=auto, low_cpu_mem_usage)...")
         self.model = AutoModelForCausalLM.from_pretrained(
             self.MODEL_PATHS[model_name],
-            quantization_config=bnb_config,
+            torch_dtype=torch.float16,
             device_map="auto",
             low_cpu_mem_usage=True,
             local_files_only=True,
