@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
 
 class HuggingFaceLLM:
@@ -17,9 +17,10 @@ class HuggingFaceLLM:
         self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_PATHS[model_name])
 
         print(f"[HuggingFaceLLM] Loading model to {device} (int8 quantized, low_cpu_mem_usage)...")
+        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             self.MODEL_PATHS[model_name],
-            load_in_8bit=True,
+            quantization_config=bnb_config,
             device_map="auto",
             low_cpu_mem_usage=True,
             local_files_only=True,
