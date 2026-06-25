@@ -16,11 +16,11 @@ class HuggingFaceLLM:
         print(f"[HuggingFaceLLM] Loading tokenizer for {model_name}...")
         self.tokenizer = AutoTokenizer.from_pretrained(self.MODEL_PATHS[model_name])
 
-        print(f"[HuggingFaceLLM] Loading model to {device} (fp16, low_cpu_mem_usage)...")
+        print(f"[HuggingFaceLLM] Loading model to {device} (int8 quantized, low_cpu_mem_usage)...")
         self.model = AutoModelForCausalLM.from_pretrained(
             self.MODEL_PATHS[model_name],
-            torch_dtype=torch.float16,
-            device_map=device,
+            load_in_8bit=True,
+            device_map="auto",
             low_cpu_mem_usage=True,
             local_files_only=True,
         )
