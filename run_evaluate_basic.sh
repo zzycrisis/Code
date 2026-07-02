@@ -1,16 +1,19 @@
 #!/bin/bash
 # =============================================================
-# Phase 2: 批量评估 SelfDefend-tuning 防御效果
+# Phase 2a: 批量评估 SelfDefend-basic 防御效果
 # =============================================================
-# 前置条件: 已完成 Phase 1 微调，LoRA 权重在 checkpoint/ 下
+# 不需要微调，不需要 API，直接用目标模型自身做影子检测
 #
-# 每个 jailbreak 结果文件用 direct 和 intent 两种 prompt 各测一次
-# 结果保存到 results/defense/<target_model>/SelfDefend-tuning-<prompt>/
+# SelfDefend-basic 原理:
+#   同一个 Qwen2.5-7B 同时承担两个角色:
+#     - 目标栈: 正常回答问题
+#     - 影子栈: 检测 prompt 是否违规 (带 few-shot 示例)
+#   两个栈并行运行，延迟 = max(目标延迟, 影子延迟)
+# =============================================================
 
 TARGET="qwen2.5-7b"
-DEFENSE="SelfDefend-tuning"
+DEFENSE="SelfDefend-basic"
 
-# Step 1 产出的攻击结果文件
 RESULT_FILES=(
     "results/primary/GCG_individual_llama2-7b_${TARGET}.json"
     "results/primary/AutoDAN-GA_llama2-7b_${TARGET}.json"
@@ -45,6 +48,6 @@ for f in "${RESULT_FILES[@]}"; do
 done
 
 echo "========================================"
-echo "All evaluations completed!"
+echo "All SelfDefend-basic evaluations completed!"
 echo "Results saved to: results/defense/${TARGET}/"
 echo "========================================"

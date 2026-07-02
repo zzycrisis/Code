@@ -14,7 +14,8 @@ ATTACK_FILES=(
     # "attack/results/primary/RLbreaker_llama-2-7b.json"
     # "attack/results/primary/Puzzler.json"
     # "attack/results/manual/DAN.json"
-    "attack/results/multilingual/MultiJail_unintentional_bn.json"
+    # "attack/results/multilingual/MultiJail_unintentional_bn.json"
+    "attack/results/normal/AlpacaEval_instruction.json"   # 正常数据，测误报用
 )
 
 python jailbreaking.py --jailbreak-path "${ATTACK_FILES[@]}" --target-model "$TARGET"
