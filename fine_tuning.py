@@ -125,7 +125,11 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 model = get_peft_model(model, peft_config)
 model.print_trainable_parameters()
-model.gradient_checkpointing_enable()  # trade compute for memory (~30% less VRAM)
+
+# 启用 gradient checkpointing 节省显存（PEFT 需要 enable_input_require_grads 配合）
+model.gradient_checkpointing_enable()
+model.enable_input_require_grads()
+
 model = model.to(device)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
