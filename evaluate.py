@@ -8,7 +8,7 @@ from utils.gpt import ChatGPT
 from model.claude import Claude
 from model.hugging_face_llm import HuggingFaceLLM
 from utils.checker import JailbreakChecker
-from model.peft_model import PeftLlama
+from model.peft_model import PeftDefense
 from defense.self_defend import SelfDefend
 
 
@@ -66,7 +66,7 @@ elif defense_method == 'SelfDefend-basic':
     defense_method = f'{defense_method}-{args.defense_prompt}'
     llm_pre = True
 elif defense_method == 'SelfDefend-tuning':
-    defense_model = PeftLlama(args.defense_prompt)
+    defense_model = PeftDefense(args.defense_prompt)
     defense_checker = SelfDefend(defense_model, defense_method, args.defense_prompt)
     defense_method = f'{defense_method}-{args.defense_prompt}'
     llm_pre = True
