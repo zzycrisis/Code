@@ -1,5 +1,6 @@
 import os
 import copy
+import json
 import argparse
 from tqdm import tqdm
 from typing import Optional, Dict, Sequence, Union
@@ -31,19 +32,24 @@ prompt_formats = {
 
 
 parser = argparse.ArgumentParser()
-# jailbreaking setting
 parser.add_argument('--base-model', type=str, default='qwen2.5', choices=base_model_paths.keys())
 parser.add_argument('--prompt-type', type=str, default='direct', choices=prompt_formats.keys())
 parser.add_argument('--max-length', type=int, default=300)
 parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--num-epochs', type=int, default=1)
 parser.add_argument('--batch-size', type=int, default=8)
+parser.add_argument('--resume', action='store_true', default=False, help='Resume from the latest checkpoint')
+parser.add_argument('--save-every', type=int, default=200, help='Save checkpoint every N steps (0 = only at epoch end)')
 args = parser.parse_args()
 
 
 model_name_or_path = base_model_paths[args.base_model]
 prompt_format = prompt_formats[args.prompt_type]
+save_path = f'checkpoint/{args.base_model}-lora-{args.prompt_type}'
+ckpt_dir = f'{save_path}-ckpt'
+os.makedirs(ckpt_dir, exist_ok=True)
 
+# ── Dataset ──────────────────────────────────────────────
 dataset = load_dataset("./data/red-team",  data_files=f'red_team_{args.prompt_type}.csv')
 dataset = dataset["train"].train_test_split(test_size=0.2)
 dataset["validation"] = dataset["test"]
@@ -85,8 +91,7 @@ def _tokenize_fn(strings: Sequence[str], tokenizer: transformers.PreTrainedToken
 def preprocess_function(examples):
     sources = examples['prompt']
     targets = examples['label']
-    # targets = copy.deepcopy(examples['prompt'])
-    
+
     examples = [s + t for s, t in zip(sources, targets)]
     examples_tokenized, sources_tokenized = [_tokenize_fn(strings, tokenizer) for strings in (examples, sources)]
     input_ids = examples_tokenized["input_ids"]
@@ -111,6 +116,7 @@ train_dataloader = DataLoader(train_dataset, shuffle=True, collate_fn=default_da
 eval_dataloader = DataLoader(eval_dataset, collate_fn=default_data_collator, batch_size=1, pin_memory=True)
 
 
+# ── Model / Optimizer / Scheduler ────────────────────────
 peft_config = LoraConfig(r=8, lora_alpha=32, lora_dropout=0.1, task_type=TaskType.CAUSAL_LM)
 model = AutoModelForCausalLM.from_pretrained(
     model_name_or_path,
@@ -119,6 +125,7 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 model = get_peft_model(model, peft_config)
 model.print_trainable_parameters()
+model.gradient_checkpointing_enable()  # trade compute for memory (~30% less VRAM)
 model = model.to(device)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
@@ -128,11 +135,67 @@ lr_scheduler = get_linear_schedule_with_warmup(
     num_training_steps=(len(train_dataloader) * args.num_epochs),
 )
 
+# ── Resume logic ─────────────────────────────────────────
+start_epoch = 0
+start_step = 0
 
-for epoch in range(args.num_epochs):
+def save_checkpoint(epoch, step):
+    """Save full training state for resuming."""
+    state = {
+        'epoch': epoch,
+        'step': step,
+        'model_state_dict': get_peft_model_state_dict(model),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': lr_scheduler.state_dict(),
+    }
+    ckpt_path = os.path.join(ckpt_dir, f'checkpoint-epoch{epoch}-step{step}.pt')
+    torch.save(state, ckpt_path)
+    # Also save the latest symlink-like marker
+    latest_path = os.path.join(ckpt_dir, 'latest.pt')
+    torch.save(state, latest_path)
+    print(f'[Checkpoint] Saved to {ckpt_path}')
+
+def load_checkpoint():
+    """Load latest checkpoint. Returns (epoch, step) or (0, 0) if none found."""
+    latest_path = os.path.join(ckpt_dir, 'latest.pt')
+    if not os.path.exists(latest_path):
+        print('[Checkpoint] No checkpoint found, starting from scratch.')
+        return 0, 0
+
+    print(f'[Checkpoint] Loading checkpoint from {latest_path}...')
+    state = torch.load(latest_path, map_location=device, weights_only=False)
+
+    # Load LoRA weights
+    from peft import set_peft_model_state_dict
+    set_peft_model_state_dict(model, state['model_state_dict'])
+
+    # Load optimizer and scheduler
+    optimizer.load_state_dict(state['optimizer_state_dict'])
+    lr_scheduler.load_state_dict(state['scheduler_state_dict'])
+
+    epoch = state['epoch']
+    step = state['step']
+    print(f'[Checkpoint] Resuming from epoch={epoch}, step={step}')
+    return epoch, step
+
+if args.resume:
+    start_epoch, start_step = load_checkpoint()
+
+total_steps = len(train_dataloader)
+
+# ── Training Loop ────────────────────────────────────────
+for epoch in range(start_epoch, args.num_epochs):
     model.train()
     total_loss = 0
-    for step, batch in enumerate(tqdm(train_dataloader)):
+
+    # Determine starting step for this epoch
+    epoch_start_step = start_step if epoch == start_epoch else 0
+
+    for step, batch in enumerate(tqdm(train_dataloader, desc=f'Epoch {epoch+1}/{args.num_epochs}')):
+        # Skip already-completed steps when resuming mid-epoch
+        if epoch == start_epoch and step < epoch_start_step:
+            continue
+
         batch = {k: v.to(device) for k, v in batch.items()}
         outputs = model(**batch)
         loss = outputs.loss
@@ -142,13 +205,21 @@ for epoch in range(args.num_epochs):
         lr_scheduler.step()
         optimizer.zero_grad()
 
-        if step%50 == 0:
-            print(f'[{step}/{len(train_dataloader)}], [loss: {loss.item()}]')
+        if step % 50 == 0:
+            print(f'[Epoch {epoch+1}] [{step}/{total_steps}], [loss: {loss.item():.4f}]')
 
+        # Mid-epoch checkpoint
+        if args.save_every > 0 and step > 0 and step % args.save_every == 0:
+            save_checkpoint(epoch, step)
+
+    # End of epoch: save checkpoint
+    save_checkpoint(epoch + 1, 0)  # epoch+1 means "completed this epoch"
+
+    # ── Evaluation ────────────────────────────────────
     model.eval()
     eval_loss = 0
     eval_preds = []
-    for step, batch in enumerate(tqdm(eval_dataloader)):
+    for step_eval, batch in enumerate(tqdm(eval_dataloader, desc='Eval')):
         batch = {k: v.to(device) for k, v in batch.items()}
         with torch.no_grad():
             outputs = model(**batch)
@@ -162,9 +233,10 @@ for epoch in range(args.num_epochs):
     eval_ppl = torch.exp(eval_epoch_loss)
     train_epoch_loss = total_loss / len(train_dataloader)
     train_ppl = torch.exp(train_epoch_loss)
-    print(f"{epoch=}: {train_ppl=} {train_epoch_loss=} {eval_ppl=} {eval_epoch_loss=}")
+    print(f"epoch={epoch}: train_ppl={train_ppl:.4f} train_loss={train_epoch_loss:.4f} eval_ppl={eval_ppl:.4f} eval_loss={eval_epoch_loss:.4f}")
 
 
+# ── Final evaluation & save ──────────────────────────────
 correct = 0
 total = 0
 for pred, true, in zip(eval_preds, dataset["validation"]["label"]):
@@ -172,15 +244,15 @@ for pred, true, in zip(eval_preds, dataset["validation"]["label"]):
         correct += 1
     total += 1
 accuracy = correct / total * 100
-print(f"{accuracy=} % on the evaluation dataset")
+print(f"accuracy={accuracy:.2f} % on the evaluation dataset")
 print(f"{eval_preds[:10]=}")
 print(f"{dataset['validation']['label'][:10]=}")
 
-save_path = f'checkpoint/{args.base_model}-lora-{args.prompt_type}'
 model.save_pretrained(save_path)
-print(f'The model is saved to {save_path}.')
+print(f'Model saved to {save_path}.')
 
 
+# ── Generation-based evaluation ──────────────────────────
 correct = 0
 for i, data in enumerate(dataset["validation"]):
     prompt = data['prompt']
@@ -190,11 +262,10 @@ for i, data in enumerate(dataset["validation"]):
         generate_ids = model.generate(inputs['input_ids'].to(device), max_new_tokens=64, pad_token_id=tokenizer.eos_token_id)
         out = tokenizer.batch_decode(generate_ids[:, inputs['input_ids'].shape[1]:], skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
 
-        if i%100==0:
+        if i % 100 == 0:
             print(f'{i+1}:\t', f'pred: {out}\t', f'label: {label}')
 
         if out.strip() == label.strip():
             correct += 1
 
-print(correct)
-print(correct/len(dataset['validation']))
+print(f'Generation accuracy: {correct}/{len(dataset["validation"])} = {correct/len(dataset["validation"]):.4f}')
