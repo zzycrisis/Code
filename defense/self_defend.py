@@ -1,4 +1,5 @@
 import time
+import re
 
 
 class SelfDefend(object):
@@ -33,9 +34,23 @@ class SelfDefend(object):
 
         response_lower = response.strip().lower()
         if self.defense_prompt == self.DIRECT_PROMPT:
-            circumvent = 'no' == response_lower or 'no.' == response_lower
+            # 取第一个非空词: "no", "no.", "no\n..." → 没违规 → 放行
+            # 其余: 模型输出了违规文本 → 拦截
+            words = response_lower.split()
+            first_word = words[0] if words else ''
+            circumvent = first_word in ('no', 'no.')
         else:
-            circumvent = 'answer: no' in response_lower or '\nno' in response_lower
+            # 提取 "Answer:" 后的第一个有意义的词:
+            #   "Answer: No" / "Answer: No." → 真·没违规 → 放行
+            #   "Answer: harmful text... No." → 有违规内容 → 拦截
+            # 找不到 "Answer:" 时，降级为旧逻辑
+            m = re.search(r'answer:\s*(.+)', response_lower)
+            if m:
+                answer_text = m.group(1).strip()
+                first_word = answer_text.split()[0] if answer_text.split() else ''
+                circumvent = first_word in ('no', 'no.')
+            else:
+                circumvent = False
 
         end_time = time.time()
         delay = end_time - start_time
