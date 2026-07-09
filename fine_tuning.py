@@ -53,8 +53,11 @@ os.makedirs(ckpt_dir, exist_ok=True)
 # ── Dataset ──────────────────────────────────────────────
 dataset = load_dataset("./data/red-team",  data_files=f'red_team_{args.prompt_type}.csv')
 dataset = dataset["train"].train_test_split(test_size=0.2)
+print(f"Dataset sizes before split — train: {len(dataset['train'])} rows")
 dataset["validation"] = dataset["test"]
 del dataset["test"]
+print(f"Dataset sizes after split — train: {len(dataset['train'])}, validation: {len(dataset['validation'])} rows")
+assert len(dataset["validation"]) > 0, "Validation set is empty! Check the CSV file — it may have too few rows or be missing."
 
 dataset = dataset.map(
     lambda x: {"prompt": [prompt_format.format(p) for p in x["prompt"]]},
@@ -249,8 +252,11 @@ for pred, true, in zip(eval_preds, dataset["validation"]["label"]):
     if pred.strip() == true.strip():
         correct += 1
     total += 1
-accuracy = correct / total * 100
-print(f"accuracy={accuracy:.2f} % on the evaluation dataset")
+if total > 0:
+    accuracy = correct / total * 100
+    print(f"accuracy={accuracy:.2f} % on the evaluation dataset")
+else:
+    print("accuracy=N/A (no evaluation predictions available)")
 print(f"{eval_preds[:10]=}")
 print(f"{dataset['validation']['label'][:10]=}")
 
@@ -274,4 +280,8 @@ for i, data in enumerate(dataset["validation"]):
         if out.strip() == label.strip():
             correct += 1
 
-print(f'Generation accuracy: {correct}/{len(dataset["validation"])} = {correct/len(dataset["validation"]):.4f}')
+n_total = len(dataset["validation"])
+if n_total > 0:
+    print(f'Generation accuracy: {correct}/{n_total} = {correct/n_total:.4f}')
+else:
+    print('Generation accuracy: N/A (empty validation set)')
