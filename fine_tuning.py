@@ -1,6 +1,7 @@
 import os
 import copy
 import json
+import math
 import argparse
 from tqdm import tqdm
 from typing import Optional, Dict, Sequence, Union
@@ -234,9 +235,9 @@ for epoch in range(start_epoch, args.num_epochs):
         )
 
     eval_epoch_loss = eval_loss / len(eval_dataloader)
-    eval_ppl = torch.exp(eval_epoch_loss)
+    eval_ppl = math.exp(eval_epoch_loss)
     train_epoch_loss = total_loss / len(train_dataloader)
-    train_ppl = torch.exp(train_epoch_loss)
+    train_ppl = math.exp(train_epoch_loss)
     print(f"epoch={epoch}: train_ppl={train_ppl:.4f} train_loss={train_epoch_loss:.4f} eval_ppl={eval_ppl:.4f} eval_loss={eval_epoch_loss:.4f}")
 
 
