@@ -189,6 +189,7 @@ if args.resume:
 total_steps = len(train_dataloader)
 
 # ── Training Loop ────────────────────────────────────────
+eval_preds = []
 for epoch in range(start_epoch, args.num_epochs):
     model.train()
     total_loss = 0
