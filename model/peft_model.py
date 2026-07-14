@@ -46,7 +46,7 @@ class PeftDefense:
 
             # Use at most 30% of free GPU memory for the defense model,
             # so the already-loaded target model isn't evicted
-            gpu_budget = max(1.0, free_gb * 0.3)
+            gpu_budget = max(1.0, free_gb)
             print(f"[PeftDefense] Allocating up to {gpu_budget:.1f} GiB on GPU, remainder on CPU")
         else:
             gpu_budget = 0
