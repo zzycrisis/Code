@@ -31,7 +31,7 @@ for f in "${RESULT_FILES[@]}"; do
         continue
     fi
 
-    for prompt in direct intent; do
+    for prompt in direct; do
         echo "========================================"
         echo "Evaluating: $(basename $f)"
         echo "Defense:    ${DEFENSE}-${prompt}"
