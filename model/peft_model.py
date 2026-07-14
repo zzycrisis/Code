@@ -19,23 +19,41 @@ class PeftDefense:
         },
     }
 
-    def __init__(self, defense_prompt="direct", base_model="qwen2.5", device="cuda", offload_dir="offload") -> None:
+    def __init__(self, defense_prompt="direct", base_model="qwen2.5", device="cuda",
+                 offload_dir="offload") -> None:
         paths = self.PEFT_MODEL_PATHS[base_model]
 
         print(f"[PeftDefense] Loading base model from {paths['base']}...")
         self.tokenizer = AutoTokenizer.from_pretrained(paths['base'])
+
+        # Load everything to CPU first
         base_model = AutoModelForCausalLM.from_pretrained(
             paths['base'],
             torch_dtype=torch.float16,
             low_cpu_mem_usage=True,
         )
+
         print(f"[PeftDefense] Loading LoRA weights from {paths[defense_prompt]}...")
         self.model = PeftModel.from_pretrained(base_model, paths[defense_prompt])
         self.model.eval()
 
-        # Manually dispatch model across GPU + CPU with offload support
-        print(f"[PeftDefense] Dispatching model across devices (offload_dir={offload_dir})...")
-        device_map = infer_auto_device_map(self.model, max_memory={0: "14GiB", "cpu": "40GiB"})
+        # Auto-detect free GPU memory and leave headroom for the target model
+        if torch.cuda.is_available():
+            free_mem, total_mem = torch.cuda.mem_get_info(0)
+            free_gb = free_mem / (1024 ** 3)
+            total_gb = total_mem / (1024 ** 3)
+            print(f"[PeftDefense] GPU memory: {free_gb:.1f} GiB free / {total_gb:.1f} GiB total")
+
+            # Use at most 30% of free GPU memory for the defense model,
+            # so the already-loaded target model isn't evicted
+            gpu_budget = max(1.0, free_gb * 0.3)
+            print(f"[PeftDefense] Allocating up to {gpu_budget:.1f} GiB on GPU, remainder on CPU")
+        else:
+            gpu_budget = 0
+
+        max_memory = {0: f"{gpu_budget:.0f}GiB", "cpu": "60GiB"}
+        print(f"[PeftDefense] Dispatching model (offload_dir={offload_dir})...")
+        device_map = infer_auto_device_map(self.model, max_memory=max_memory)
         dispatch_model(self.model, device_map, offload_dir=offload_dir)
         print(f"[PeftDefense] Model loaded and dispatched successfully.")
 
