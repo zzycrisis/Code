@@ -1,6 +1,7 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
+from accelerate import dispatch_model, infer_auto_device_map
 
 
 class PeftDefense:
@@ -26,13 +27,17 @@ class PeftDefense:
         base_model = AutoModelForCausalLM.from_pretrained(
             paths['base'],
             torch_dtype=torch.float16,
-            device_map='auto',
             low_cpu_mem_usage=True,
         )
         print(f"[PeftDefense] Loading LoRA weights from {paths[defense_prompt]}...")
-        self.model = PeftModel.from_pretrained(base_model, paths[defense_prompt], offload_dir=offload_dir)
+        self.model = PeftModel.from_pretrained(base_model, paths[defense_prompt])
         self.model.eval()
-        print(f"[PeftDefense] Model loaded successfully.")
+
+        # Manually dispatch model across GPU + CPU with offload support
+        print(f"[PeftDefense] Dispatching model across devices (offload_dir={offload_dir})...")
+        device_map = infer_auto_device_map(self.model, max_memory={0: "14GiB", "cpu": "40GiB"})
+        dispatch_model(self.model, device_map, offload_dir=offload_dir)
+        print(f"[PeftDefense] Model loaded and dispatched successfully.")
 
         self.device = device
 
