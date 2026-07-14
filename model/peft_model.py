@@ -26,12 +26,10 @@ class PeftDefense:
         base_model = AutoModelForCausalLM.from_pretrained(
             paths['base'],
             torch_dtype=torch.float16,
-            device_map='auto',
             low_cpu_mem_usage=True,
-            offload_dir=offload_dir,
         )
         print(f"[PeftDefense] Loading LoRA weights from {paths[defense_prompt]}...")
-        self.model = PeftModel.from_pretrained(base_model, paths[defense_prompt])
+        self.model = PeftModel.from_pretrained(base_model, paths[defense_prompt], device_map='auto', offload_dir=offload_dir)
         self.model.eval()
         print(f"[PeftDefense] Model loaded successfully.")
 
