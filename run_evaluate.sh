@@ -20,8 +20,8 @@ RESULT_FILES=(
     # "results/primary/TAP_llama-2-13b_${TARGET}.json"
     # "results/primary/RLbreaker_llama-2-7b_${TARGET}.json"
     # "results/primary/Puzzler_${TARGET}.json"
-    "results/manual/DAN_${TARGET}.json"
-    "results/multilingual/MultiJail_unintentional_bn_${TARGET}.json"
+    # "results/manual/DAN_${TARGET}.json"
+    # "results/multilingual/MultiJail_unintentional_bn_${TARGET}.json"
     "results/normal/AlpacaEval_instruction_${TARGET}.json"   # 正常数据 → 测误报率
 )
 
@@ -31,7 +31,7 @@ for f in "${RESULT_FILES[@]}"; do
         continue
     fi
 
-    for prompt in direct; do
+    for prompt in intent; do
         echo "========================================"
         echo "Evaluating: $(basename $f)"
         echo "Defense:    ${DEFENSE}-${prompt}"
